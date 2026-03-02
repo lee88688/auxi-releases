@@ -28,7 +28,7 @@ env:
   # 要构建的源码仓库（可按需修改）
   SOURCE_REPO: lee88688/auxi
   SOURCE_PATH: source
-  NODE_VERSION: "20"
+  NODE_VERSION: "22"
   PNPM_VERSION: "9"
 
   # 默认不做代码签名
@@ -127,4 +127,3 @@ jobs:
           draft: ${{ inputs.draft }}
           prerelease: ${{ inputs.prerelease }}
           files: dist/**/*
-
