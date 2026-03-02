@@ -1,0 +1,130 @@
+name: Build & Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      sourceRef:
+        description: "源码仓库 ref（branch/tag/commit）"
+        required: false
+        default: "main"
+      tag:
+        description: "Release tag（例如 v0.1.0），留空则自动生成"
+        required: false
+      prerelease:
+        description: "是否标记为预发布"
+        required: false
+        default: false
+        type: boolean
+      draft:
+        description: "是否创建草稿 Release"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+env:
+  # 要构建的源码仓库（可按需修改）
+  SOURCE_REPO: lee88688/auxi
+  SOURCE_PATH: source
+  NODE_VERSION: "20"
+  PNPM_VERSION: "9"
+
+  # 默认不做代码签名
+  CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+  ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
+  ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.cache/electron-builder
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Checkout (this repo)
+        uses: actions/checkout@v4
+
+      - name: Checkout (source repo)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.SOURCE_REPO }}
+          ref: ${{ inputs.sourceRef }}
+          token: ${{ secrets.AUXI_SOURCE_TOKEN }}
+          path: ${{ env.SOURCE_PATH }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: ${{ env.SOURCE_PATH }}/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: ${{ env.SOURCE_PATH }}
+        run: pnpm install --frozen-lockfile
+
+      - name: Build (Windows)
+        if: matrix.os == 'windows-latest'
+        working-directory: ${{ env.SOURCE_PATH }}
+        run: pnpm build:win
+
+      - name: Build (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        working-directory: ${{ env.SOURCE_PATH }}
+        run: pnpm build:linux
+
+      - name: Build (macOS)
+        if: matrix.os == 'macos-latest'
+        working-directory: ${{ env.SOURCE_PATH }}
+        run: pnpm build:mac
+
+      - name: Upload dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.os }}
+          if-no-files-found: error
+          path: |
+            ${{ env.SOURCE_PATH }}/dist/**
+
+  release:
+    name: Release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download dist artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Resolve release metadata
+        id: meta
+        shell: bash
+        run: |
+          if [[ -n "${{ inputs.tag }}" ]]; then
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=build-${{ inputs.sourceRef }}-${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: ${{ steps.meta.outputs.tag }}
+          draft: ${{ inputs.draft }}
+          prerelease: ${{ inputs.prerelease }}
+          files: dist/**/*
+
