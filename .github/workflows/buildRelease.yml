@@ -28,7 +28,7 @@ env:
   # 要构建的源码仓库（可按需修改）
   SOURCE_REPO: lee88688/auxi
   SOURCE_PATH: source
-  NODE_VERSION: "22"
+  NODE_VERSION: "22.17.1"
   PNPM_VERSION: "9"
 
   # 默认不做代码签名
@@ -38,9 +38,54 @@ env:
   ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.cache/electron-builder
 
 jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout (this repo)
+        uses: actions/checkout@v4
+
+      - name: Checkout (source repo)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.SOURCE_REPO }}
+          ref: ${{ inputs.sourceRef }}
+          token: ${{ secrets.AUXI_SOURCE_TOKEN }}
+          path: ${{ env.SOURCE_PATH }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: ${{ env.SOURCE_PATH }}/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: ${{ env.SOURCE_PATH }}
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers (with deps)
+        working-directory: ${{ env.SOURCE_PATH }}
+        run: pnpm exec playwright install --with-deps
+
+      - name: Unit tests
+        working-directory: ${{ env.SOURCE_PATH }}
+        run: pnpm test
+
+      - name: E2E tests
+        working-directory: ${{ env.SOURCE_PATH }}
+        run: xvfb-run -a pnpm test:e2e
+
   build:
     name: Build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    needs: test
     strategy:
       fail-fast: false
       matrix:

@@ -12,3 +12,4 @@
    - `sourceRef`：要构建的源码 ref（branch/tag/commit），默认 `main`
    - `tag`：发布用的 tag（例如 `v0.1.0`），留空将自动生成
 
+> 说明：workflow 会先完整运行单元测试与 E2E 集成测试；任一失败都会中止后续构建与发布。
