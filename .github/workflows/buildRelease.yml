@@ -149,6 +149,82 @@ jobs:
             echo "tag=build-${{ inputs.sourceRef }}-${{ github.run_number }}" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Checkout (source repo)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.SOURCE_REPO }}
+          ref: ${{ inputs.sourceRef }}
+          token: ${{ secrets.AUXI_SOURCE_TOKEN }}
+          path: ${{ env.SOURCE_PATH }}
+
+      - name: Prepare release notes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          src_dir="${{ env.SOURCE_PATH }}"
+          out_file="release-notes.md"
+
+          is_safe_ref() {
+            [[ "$1" =~ ^[A-Za-z0-9._-]+$ ]]
+          }
+
+          try_copy_notes_file() {
+            local ref="$1"
+            if ! is_safe_ref "$ref"; then
+              return 1
+            fi
+            local candidate="$src_dir/docs/releases/$ref.md"
+            if [[ -f "$candidate" ]]; then
+              cp "$candidate" "$out_file"
+              return 0
+            fi
+            return 1
+          }
+
+          try_tag_notes() {
+            local ref="$1"
+            if ! is_safe_ref "$ref"; then
+              return 1
+            fi
+            if git -C "$src_dir" show-ref --tags --verify --quiet "refs/tags/$ref"; then
+              git -C "$src_dir" for-each-ref "refs/tags/$ref" --format='%(contents)' > "$out_file" || true
+              if [[ -s "$out_file" ]]; then
+                return 0
+              fi
+            fi
+            return 1
+          }
+
+          # 优先级：
+          # 1) 源码仓库中的 docs/releases/<tag>.md（与版本 tag 绑定，最稳定）
+          # 2) 源码仓库的 annotated tag message（适合把 notes 写进 tag）
+          # 3) 源码仓库当前 ref 的 commit message（兜底）
+          rm -f "$out_file"
+
+          if [[ -n "${{ inputs.tag }}" ]]; then
+            try_copy_notes_file "${{ inputs.tag }}" || true
+            if [[ ! -s "$out_file" ]]; then
+              try_tag_notes "${{ inputs.tag }}" || true
+            fi
+          fi
+
+          if [[ ! -s "$out_file" ]]; then
+            try_copy_notes_file "${{ inputs.sourceRef }}" || true
+          fi
+
+          if [[ ! -s "$out_file" ]]; then
+            try_tag_notes "${{ inputs.sourceRef }}" || true
+          fi
+
+          if [[ ! -s "$out_file" ]]; then
+            git -C "$src_dir" show -s --format=%B HEAD > "$out_file"
+          fi
+
+          if [[ ! -s "$out_file" ]]; then
+            echo "（未提供 Release Notes）" > "$out_file"
+          fi
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -156,4 +232,5 @@ jobs:
           name: ${{ steps.meta.outputs.tag }}
           draft: ${{ inputs.draft }}
           prerelease: ${{ inputs.prerelease }}
+          body_path: release-notes.md
           files: dist/**/*
