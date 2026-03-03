@@ -3,6 +3,8 @@
 这个仓库用于在公有仓库中运行 GitHub Actions，从源码仓库构建 Auxi 桌面端二进制，并将产物发布到本仓库的 GitHub Releases。
 
 > 注意：此仓库不包含 Auxi 源码，只用于构建与发布。
+>
+> 当前仅构建 Windows 产物（暂不构建 Linux/macOS）。
 
 ## 维护者使用方式
 
