@@ -10,6 +10,8 @@
 
 1. 在本仓库 `Settings -> Secrets and variables -> Actions` 中添加 Secret：
    - `AUXI_SOURCE_TOKEN`：对源码仓库有读取权限的 GitHub Token（如源码仓库为私有，需要能 clone）
+     - 推荐使用 Fine-grained PAT：只授权源码仓库，权限仅需 `Contents: Read-only`
+     - 添加位置：`Settings -> Secrets and variables -> Actions -> New repository secret`
 2. 手动触发 Actions：`Actions -> Build & Release -> Run workflow`
    - `sourceRef`：要构建的源码 ref（branch/tag/commit），默认 `main`
    - `tag`：发布用的 tag（例如 `v0.1.0`），留空将自动生成
